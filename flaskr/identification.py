@@ -15,8 +15,6 @@ bp = Blueprint('identification', __name__, url_prefix='/classifications')
 UPLOAD_FOLDER = '/path/to/the/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-mo106_mean = 274.528301886792
-mo106_std = 61.6721296237372
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -27,8 +25,7 @@ def process_image(image):
     transformation = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mo106_mean, std=mo106_std)
+        transforms.ToTensor()
     ])
     image_tensor = transformation(image).unsqueeze(0)
 

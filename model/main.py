@@ -22,9 +22,6 @@ shuffle_dataset = True
 random_seed = 42
 validation_split = .2
 
-mo106_mean = 274.528301886792
-mo106_std = 61.6721296237372
-
 def train():
     os.makedirs("model_saves", exist_ok=True)
     mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
@@ -34,8 +31,7 @@ def train():
                                           transforms.RandomHorizontalFlip(),
                                           transforms.RandomVerticalFlip(),
                                           transforms.RandomRotation((45, 90)),
-                                          transforms.ToTensor(),
-                                          transforms.Normalize(mean=mo106_mean, std=mo106_std)
+                                          transforms.ToTensor()
                                       ]))
 
     dataset_size = len(mushroom_dataset)
