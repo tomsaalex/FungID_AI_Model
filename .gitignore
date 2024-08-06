@@ -242,3 +242,5 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+/model/data/
+/model/model_files/
