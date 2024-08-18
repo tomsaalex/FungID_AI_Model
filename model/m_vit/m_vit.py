@@ -8,6 +8,8 @@ from m_vit.aspp import ASPP
 from m_vit.block_attention import BlockAttention
 from m_vit.grid_attention import GridAttention
 from m_vit.mv2_block import MV2_Block
+
+from model.m_vit.aspp_second_impl import _ASPP
 from timm.layers import make_divisible, to_2tuple, ConvNormAct, ClassifierHead, SelectAdaptivePool2d, Linear
 from timm.models.byobnet import LayerFn, BottleneckBlock, num_groups
 from timm.models.mobilevit import MobileVitBlock
@@ -68,6 +70,8 @@ class MVitClassifier(nn.Module):
             transformer_depth=3,
         )
 
+        self.aspp = _ASPP(160, 160, [6, 12, 18])
+
         self.final_conv = ConvNormAct(in_channels=160, out_channels=640, kernel_size=1, stride=1, padding=0, bias=False,
                                       act_layer=nn.SiLU)
         self.global_pool = SelectAdaptivePool2d(
@@ -97,6 +101,7 @@ class MVitClassifier(nn.Module):
         x = self.MV2_Block7(x)
         self.MViTBlock3(x)
 
+        x = self.aspp(x)
         x = self.final_conv(x)
         x = self.global_pool(x)
         x = self.dropout(x)

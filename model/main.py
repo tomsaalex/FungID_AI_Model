@@ -8,6 +8,9 @@ from torch import nn, softmax
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision import transforms
 
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, accuracy_score, \
+    ConfusionMatrixDisplay
+
 import timm
 from MO_106_Dataset import MO_106_Dataset
 from torch.utils.tensorboard import SummaryWriter
@@ -17,14 +20,14 @@ from m_vit.m_vit import MVitClassifier
 weight_decay = 5e-3
 learning_rate = 5e-4
 batch_size = 32
-epochs = 300
+epochs = 40
 shuffle_dataset = True
 random_seed = 42
 validation_split = .2
 
 def train():
     os.makedirs("model_saves", exist_ok=True)
-    mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
+    mushroom_dataset = MO_106_Dataset("data/mo106_dataset_test.csv", "data",
                                       transform=transforms.Compose([
                                           transforms.Resize(256),
                                           transforms.RandomCrop(224),
@@ -59,8 +62,8 @@ def train():
     )
     print(f"Using {device} device")
 
-    #model = timm.create_model("mobilevit_s", pretrained=False, num_classes=106)
-    model = MVitClassifier(3, 106, batch_size)
+    model = timm.create_model("mobilevit_s", pretrained=False, num_classes=106)
+    #model = MVitClassifier(3, 106, batch_size)
     model.to(device)
     writer = SummaryWriter()
 
@@ -116,7 +119,10 @@ def train_loop(dataloader, device, model, loss_fn, optimizer, writer, global_ste
 def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
     size = len(dataloader.sampler.indices)
     num_batches = len(dataloader)
-    validation_loss, correct = 0, 0
+    validation_loss, correctly_classified_samples = 0, 0
+
+    all_preds = []
+    all_labels = []
 
     model.eval()
     with torch.no_grad():
@@ -125,21 +131,40 @@ def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
             y = y.to(device)
             pred = model(X)
             validation_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+            correctly_classified_samples += (pred.argmax(1) == y).type(torch.float).sum().item()
+
+            all_preds.extend(pred.argmax(1).cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
 
     validation_loss /= num_batches
-    correct /= size
+    accuracy_custom = correctly_classified_samples / size
+
+    cm = confusion_matrix(all_labels, all_preds)
+    accuracy = accuracy_score(all_labels, all_preds, average="weighted", zero_division=0)
+    precision = precision_score(all_labels, all_preds, average="weighted", zero_division=0)
+    recall = recall_score(all_labels, all_preds, average="weighted", zero_division=0)
+    f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
 
     writer.add_scalar("Loss/validation", validation_loss, epoch_num)
-    writer.add_scalar("Accuracy/validation", 100*correct, epoch_num)
-    print(f"Validation: \n Accuracy: {100 * correct:>0.1f}%, Avg. loss: {validation_loss:>8f} \n")
+    writer.add_scalar("Accuracy/validation", accuracy_custom, epoch_num)
+    writer.add_scalar("Precision/validation", precision, epoch_num)
+    writer.add_scalar("Recall/validation", recall, epoch_num)
+    writer.add_scalar("F1/validation", f1, epoch_num)
+    print(f"Validation: \n Accuracy: {100 * accuracy_custom:>0.1f}%, Avg. loss: {validation_loss:>8f} \n")
+
+    # Display Confusion Matrix
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    disp.plot(cmap=plt.cm.Blues)
+    plt.title(f'Confusion Matrix for Epoch {epoch_num}')
+    plt.show()
 
 
 def eval():
-    mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
+    mushroom_dataset = MO_106_Dataset("data/mo106_dataset_test.csv", "data",
                                       transform=transforms.Compose([
                                           transforms.Resize(256),
                                           transforms.RandomCrop(224),
+                                          transforms.RandomHorizontalFlip(),
                                           transforms.ToTensor()
                                       ]))
 
