@@ -44,7 +44,6 @@ def get_class_labels(csv_file_path):
         print(idx, label)
     return label_map
 
-print("\n\nCurrent workdir is: " + os.getcwd() + "\n\n")
 image_classes_map = get_class_labels("model/data/mo106_dataset.csv")
 model = timm.create_model("mobilevitv2_200", pretrained=False, num_classes=106)
 model.load_state_dict(torch.load("model/model_files/mobile_vit_v2_pretrained_82.1_acc.pth"))
@@ -60,7 +59,7 @@ def get_image_classification(file):
 
     class_index = probabilities.argmax()
 
-    # Get the predicted class and probability\
+    # Get the predicted class and probability
     print(image_classes_map)
     predicted_class = image_classes_map[class_index]
 
@@ -83,6 +82,4 @@ def identify_mushroom():
         image_classification = get_image_classification(file)
         return {"classificationResult": image_classification}, 200
 
-
-    #return {"classificationResult": "File found" + secure_filename(file.filename)}, 200
     return {"classificationResult": "Something went wrong while processing the image"}, 500

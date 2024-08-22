@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 
-from m_vit.g_mlp_pytorch import gMLPBlock, gMLPForImageClassification
-from m_vit.self_attention import Self_Attn
+from model.m_vit_model.g_mlp_pytorch import gMLPForImageClassification
+from model.m_vit_model.self_attention import Self_Attn
 
 
 class BlockAttention(nn.Module):

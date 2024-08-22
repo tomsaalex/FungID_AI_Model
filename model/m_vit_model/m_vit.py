@@ -4,12 +4,10 @@ import torch
 from torch import nn
 from torch.nn import Dropout
 
-from m_vit.aspp import ASPP
-from m_vit.block_attention import BlockAttention
-from m_vit.grid_attention import GridAttention
-from m_vit.mv2_block import MV2_Block
-
-from model.m_vit.aspp_second_impl import _ASPP
+from model.m_vit_model.aspp_second_impl import _ASPP
+from model.m_vit_model.block_attention import BlockAttention
+from model.m_vit_model.grid_attention import GridAttention
+from model.m_vit_model.mv2_block import MV2_Block
 from timm.layers import make_divisible, to_2tuple, ConvNormAct, ClassifierHead, SelectAdaptivePool2d, Linear
 from timm.models.byobnet import LayerFn, BottleneckBlock, num_groups
 from timm.models.mobilevit import MobileVitBlock

@@ -3,8 +3,8 @@ import math
 import torch
 from torch import nn
 
-from m_vit.g_mlp_pytorch import gMLPForImageClassification
-from m_vit.self_attention import Self_Attn
+from model.m_vit_model.g_mlp_pytorch import gMLPForImageClassification
+from model.m_vit_model.self_attention import Self_Attn
 from timm.models.mlp_mixer import gmlp_b16_224
 
 
