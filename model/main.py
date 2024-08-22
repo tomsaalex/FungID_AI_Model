@@ -20,14 +20,14 @@ from m_vit.m_vit import MVitClassifier
 weight_decay = 5e-3
 learning_rate = 5e-4
 batch_size = 32
-epochs = 40
+epochs = 100
 shuffle_dataset = True
 random_seed = 42
 validation_split = .2
 
 def train():
     os.makedirs("model_saves", exist_ok=True)
-    mushroom_dataset = MO_106_Dataset("data/mo106_dataset_test.csv", "data",
+    mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
                                       transform=transforms.Compose([
                                           transforms.Resize(256),
                                           transforms.RandomCrop(224),
@@ -62,7 +62,8 @@ def train():
     )
     print(f"Using {device} device")
 
-    model = timm.create_model("mobilevit_s", pretrained=False, num_classes=106)
+    #model = timm.create_model("mobilevit_s", pretrained=False, num_classes=106)
+    model = timm.create_model("mobilevitv2_200", pretrained=False, num_classes=106)
     #model = MVitClassifier(3, 106, batch_size)
     model.to(device)
     writer = SummaryWriter()
@@ -75,23 +76,26 @@ def train():
 
     global_step = 0
 
-    for t in range(epochs):
-        print(f"Epoch {t + 1}\n-------------------------------------")
-        if t % 5 == 0 or t == epochs - 1:
+    for t in range(1, epochs + 1):
+        print(f"Epoch {t}\n-------------------------------------")
+        if t % 5 == 0 or t == epochs:
             torch.save(model.state_dict(), f"model_saves/model_weights_epoch_{t}.pth")
             print(f"Model saved at epoch {t}.")
 
-        global_step = train_loop(train_dataloader, device, model, loss_fn, optimizer, writer, global_step)
-        validation_loop(validation_dataloader, device, model, loss_fn, writer, t+1)
+        global_step = train_loop(train_dataloader, device, model, loss_fn, optimizer, writer, global_step, epoch_num=t)
+        validation_loop(validation_dataloader, device, model, loss_fn, writer, t)
 
     writer.flush()
     writer.close()
     print("Done!")
 
 
-def train_loop(dataloader, device, model, loss_fn, optimizer, writer, global_step):
+def train_loop(dataloader, device, model, loss_fn, optimizer, writer, global_step, epoch_num):
     size = len(dataloader.sampler.indices)
+    all_preds = []
+    all_labels = []
 
+    correctly_classified_samples = 0
     model.train()
     for batch, (X, y) in enumerate(dataloader):
         print(f"Starting batch: {batch}")
@@ -99,6 +103,11 @@ def train_loop(dataloader, device, model, loss_fn, optimizer, writer, global_ste
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y)
+
+        correctly_classified_samples += (pred.argmax(1) == y).type(torch.float).sum().item()
+
+        all_preds.extend(pred.argmax(1).cpu().numpy())
+        all_labels.extend(y.cpu().numpy())
 
         writer.add_scalar("Loss/train", loss, global_step)
 
@@ -112,6 +121,16 @@ def train_loop(dataloader, device, model, loss_fn, optimizer, writer, global_ste
             loss, current = loss.item(), batch * batch_size + len(X)
 
             print(f"loss: {loss:>7f} [{current:>5d}/{size:>5d}]")
+
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision = precision_score(all_labels, all_preds, average='weighted', zero_division=0)
+    recall = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
+    f1 = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
+
+    writer.add_scalar("Accuracy/train", accuracy, epoch_num)
+    writer.add_scalar("Precision/train", precision, epoch_num)
+    writer.add_scalar("Recall/train", recall, epoch_num)
+    writer.add_scalar("F1/train", f1, epoch_num)
 
     return global_step
 
@@ -140,17 +159,18 @@ def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
     accuracy_custom = correctly_classified_samples / size
 
     cm = confusion_matrix(all_labels, all_preds)
-    accuracy = accuracy_score(all_labels, all_preds, average="weighted", zero_division=0)
-    precision = precision_score(all_labels, all_preds, average="weighted", zero_division=0)
-    recall = recall_score(all_labels, all_preds, average="weighted", zero_division=0)
-    f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision = precision_score(all_labels, all_preds, average='weighted', zero_division=0)
+    recall = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
+    f1 = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
 
     writer.add_scalar("Loss/validation", validation_loss, epoch_num)
-    writer.add_scalar("Accuracy/validation", accuracy_custom, epoch_num)
+    writer.add_scalar("Accuracy/validation", accuracy, epoch_num)
     writer.add_scalar("Precision/validation", precision, epoch_num)
     writer.add_scalar("Recall/validation", recall, epoch_num)
     writer.add_scalar("F1/validation", f1, epoch_num)
-    print(f"Validation: \n Accuracy: {100 * accuracy_custom:>0.1f}%, Avg. loss: {validation_loss:>8f} \n")
+    print(f"Validation: \n Accuracy Custom: {100 * accuracy_custom:>0.5f}%, Avg. loss: {validation_loss:>8f} \n")
+    print(f"Accuracy: {accuracy:>0.5f}, Precision: {precision:>0.5}, Recall: {recall:>0.5f}, F1: {f1:>0.5f}")
 
     # Display Confusion Matrix
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
@@ -160,7 +180,7 @@ def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
 
 
 def eval():
-    mushroom_dataset = MO_106_Dataset("data/mo106_dataset_test.csv", "data",
+    mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
                                       transform=transforms.Compose([
                                           transforms.Resize(256),
                                           transforms.RandomCrop(224),
