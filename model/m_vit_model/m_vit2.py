@@ -9,7 +9,7 @@ from model.m_vit_model.block_attention import BlockAttention
 from model.m_vit_model.grid_attention import GridAttention
 from model.m_vit_model.mv2_block import MV2_Block
 from timm import is_exportable
-from timm.layers import make_divisible, to_2tuple, ConvNormAct, ClassifierHead, SelectAdaptivePool2d, Linear
+from timm.layers import make_divisible, to_2tuple, ConvNormAct, ClassifierHead, SelectAdaptivePool2d, Linear, GroupNorm1
 from timm.models.byobnet import LayerFn, BottleneckBlock, num_groups
 from timm.models.mobilevit import MobileVitBlock, LinearTransformerBlock
 from timm.models.vision_transformer import Block as TransformerBlock
@@ -25,24 +25,26 @@ class MVitClassifier2(nn.Module):
         self.MV2_Block1 = MV2_Block(in_channels=64, mid_channels=128, out_channels=128, stride=1)
         self.MV2_Block2 = MV2_Block(in_channels=128, mid_channels=256, out_channels=256, stride=2)
         self.MV2_Block3 = MV2_Block(in_channels=256, mid_channels=512, out_channels=256, stride=1)
-        self.MV2_Block4 = MV2_Block(in_channels=256, mid_channels=512, out_channels=512, stride=1)
+        self.MV2_Block4 = MV2_Block(in_channels=256, mid_channels=512, out_channels=512, stride=2)
 
         self.MViT2Block1 = MVit2Block(
             input_shape=(batch_size, 512, 28, 28),
             transformer_dim=256,
             patch_size=7,
-            transformer_depth=2
+            transformer_depth=2,
+            groups=512
         )
 
-        self.MV2_Block4 = MV2_Block(in_channels=512, mid_channels=1024, out_channels=768, stride=2)
+        self.MV2_Block5 = MV2_Block(in_channels=512, mid_channels=1024, out_channels=768, stride=2)
         self.MViT2Block2 = MVit2Block(
             input_shape=(batch_size, 768, 14, 14),
             transformer_dim=384,
             patch_size=7,
-            transformer_depth=4
+            transformer_depth=4,
+            groups=768
         )
 
-        self.MV2_Block7 = MV2_Block(in_channels=768, mid_channels=1536, out_channels=1024, stride=2)
+        self.MV2_Block6 = MV2_Block(in_channels=768, mid_channels=1536, out_channels=1024, stride=2)
         self.MViT2Block3 = MVit2Block(
             input_shape=(batch_size, 1024, 7, 7),
             transformer_dim=512,
@@ -68,12 +70,12 @@ class MVitClassifier2(nn.Module):
         x = self.MV2_Block3(x)
         x = self.MV2_Block4(x)
 
-        x = self.MV2_Block5(x)
         self.MViT2Block1(x)
-        x = self.MV2_Block6(x)
-        self.MViT2Block2(x)
+        x = self.MV2_Block5(x)
 
-        x = self.MV2_Block7(x)
+        self.MViT2Block2(x)
+        x = self.MV2_Block6(x)
+
         self.MViT2Block3(x)
 
         x = self.aspp(x)
@@ -94,7 +96,7 @@ class MVit2Block(nn.Module):
             kernel_size=3,
             stride=1,
             bottle_ratio=1.0,
-            group_size=None,
+            group_size=1,
             dilation=(1, 1),
             mlp_ratio: float = 2.0,
             transformer_dim=None,
@@ -103,12 +105,13 @@ class MVit2Block(nn.Module):
             drop=0,
             no_fusion=False,
             num_heads=4,
-            transformer_norm_layer=nn.LayerNorm,
+            transformer_norm_layer=GroupNorm1,
             drop_path_rate=0.0,
             layers=None,
             patch_size=7,
             grid_size=7,
-            block_size=7
+            block_size=7,
+            groups=1,
     ):
         # Global attention branch
         super(MVit2Block, self).__init__()
@@ -117,7 +120,6 @@ class MVit2Block(nn.Module):
         _, in_channels, height, width = input_shape
 
         layers = layers or LayerFn()
-        groups = num_groups(group_size, in_channels)
         out_channels = out_channels or in_channels
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_channels)
 

@@ -15,7 +15,8 @@ import timm
 from MO_106_Dataset import MO_106_Dataset
 from torch.utils.tensorboard import SummaryWriter
 
-from m_vit.m_vit import MVitClassifier
+
+from model.m_vit_model.m_vit2 import MVitClassifier2
 
 weight_decay = 5e-3
 learning_rate = 5e-4
@@ -63,7 +64,8 @@ def train():
     print(f"Using {device} device")
 
     #model = timm.create_model("mobilevit_s", pretrained=False, num_classes=106)
-    model = timm.create_model("mobilevitv2_200", pretrained=False, num_classes=106)
+    #model = timm.create_model("mobilevitv2_200", pretrained=False, num_classes=106)
+    model = MVitClassifier2(3, 106, batch_size)
     #model = MVitClassifier(3, 106, batch_size)
     model.to(device)
     writer = SummaryWriter()
