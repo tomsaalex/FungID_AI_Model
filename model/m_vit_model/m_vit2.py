@@ -3,6 +3,7 @@ import math
 import torch
 from torch import nn
 from torch.nn import Dropout, Identity
+import torch.nn.functional as F
 
 from model.m_vit_model.aspp_second_impl import _ASPP
 from model.m_vit_model.block_attention import BlockAttention
@@ -103,8 +104,6 @@ class MVit2Block(nn.Module):
             transformer_depth=2,
             attn_drop=0.0,
             drop=0,
-            no_fusion=False,
-            num_heads=4,
             transformer_norm_layer=GroupNorm1,
             drop_path_rate=0.0,
             layers=None,
@@ -124,7 +123,7 @@ class MVit2Block(nn.Module):
         transformer_dim = transformer_dim or make_divisible(bottle_ratio * in_channels)
 
         self.conv_nxn_global = layers.conv_norm_act(
-            in_channels, in_channels, kernel_size, stride, groups, dilation[0]
+            in_channels, in_channels, kernel_size, stride=1, groups=groups, dilation=dilation[0]
         )
         self.conv_1x1_global = nn.Conv2d(in_channels, transformer_dim, kernel_size=1, bias=False)
 
@@ -136,7 +135,6 @@ class MVit2Block(nn.Module):
                     attn_drop=attn_drop,
                     drop=drop,
                     drop_path=drop_path_rate,
-                    act_layer=layers.act,
                     norm_layer=transformer_norm_layer
                 )
                 for _ in range(transformer_depth)
@@ -158,7 +156,7 @@ class MVit2Block(nn.Module):
         self.grid_attention = GridAttention(in_channels, width, height, grid_size)
 
         # Fusion
-        self.conv_fusion = layers.conv_norm_act(3 * in_channels, in_channels, kernel_size=kernel_size, stride=1)
+        self.conv_fusion = layers.conv_norm_act(2 * in_channels, in_channels, kernel_size=kernel_size, stride=1)
 
     def unfold(self, x):
         # Unfold (feature map -> patches)
@@ -168,11 +166,13 @@ class MVit2Block(nn.Module):
         num_patch_h, num_patch_w = new_h // patch_h, new_w // patch_w  # n_h, n_w
         num_patches = num_patch_h * num_patch_w  # N
 
-        # [B, C, H, W] --> [B * C * n_h, n_w, p_h, p_w]
-        x = x.reshape(B * C * num_patch_h, patch_h, num_patch_w, patch_w).transpose(1, 2)
-        # [B * C * n_h, n_w, p_h, p_w] --> [BP, N, C] where P = p_h * p_w and N = n_h * n_w
-        x = x.reshape(B, C, num_patches, self.patch_area).transpose(1, 3).reshape(B * self.patch_area, num_patches, -1)
-
+        # Unfold (feature map -> patches), [B, C, H, W] -> [B, C, P, N]
+        C = x.shape[1]
+        if self.coreml_exportable:
+            x = F.unfold(x, kernel_size=(patch_h, patch_w), stride=(patch_h, patch_w))
+        else:
+            x = x.reshape(B, C, num_patch_h, patch_h, num_patch_w, patch_w).permute(0, 1, 3, 5, 2, 4)
+        x = x.reshape(B, C, -1, num_patches)
         return x, (B, C, H, W)
 
     def fold(self, x, req_shape):
@@ -182,18 +182,18 @@ class MVit2Block(nn.Module):
         num_patch_h, num_patch_w = new_h // patch_h, new_w // patch_w  # n_h, n_w
         num_patches = num_patch_h * num_patch_w  # N
 
-        # Fold (patch -> feature map)
-        # [B, P, N, C] --> [B*C*n_h, n_w, p_h, p_w]
-        x = x.contiguous().view(B, self.patch_area, num_patches, -1)
-        x = x.transpose(1, 3).reshape(B * C * num_patch_h, num_patch_w, patch_h, patch_w)
-        # [B*C*n_h, n_w, p_h, p_w] --> [B*C*n_h, p_h, n_w, p_w] --> [B, C, H, W]
-        x = x.transpose(1, 2).reshape(B, C, num_patch_h * patch_h, num_patch_w * patch_w)
+        # Fold (patches -> feature map), [B, C, P, N] --> [B, C, H, W]
+        if self.coreml_exportable:
+            # adopted from https://github.com/apple/ml-cvnets/blob/main/cvnets/modules/mobilevit_block.py#L609-L624
+            x = x.reshape(B, C * patch_h * patch_w, num_patch_h, num_patch_w)
+            x = F.pixel_shuffle(x, upscale_factor=patch_h)
+        else:
+            x = x.reshape(B, C, patch_h, patch_w, num_patch_h, num_patch_w).permute(0, 1, 4, 2, 5, 3)
+            x = x.reshape(B, C, num_patch_h * patch_h, num_patch_w * patch_w)
 
         return x
 
     def forward(self, x):
-        original_x = x.clone()
-
         # MDA Branch
         mda_x = self.conv_1x1_mda(x)
         mda_x = self.block_attention(mda_x)
@@ -215,7 +215,7 @@ class MVit2Block(nn.Module):
 
         # Fusion
 
-        final_x = self.conv_fusion(torch.cat([original_x, mda_x, global_x], dim=1))
+        final_x = self.conv_fusion(torch.cat([mda_x, global_x], dim=1))
         #final_x = self.conv_fusion(torch.cat([original_x, global_x], dim=1))
         #final_x = global_x
         return final_x
