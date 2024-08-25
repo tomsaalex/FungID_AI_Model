@@ -67,6 +67,7 @@ def train():
     #model = timm.create_model("mobilevitv2_200", pretrained=False, num_classes=106)
     model = MVitClassifier2(3, 106, batch_size)
     #model = MVitClassifier(3, 106, batch_size)
+
     model.to(device)
     writer = SummaryWriter()
 
@@ -160,7 +161,6 @@ def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
     validation_loss /= num_batches
     accuracy_custom = correctly_classified_samples / size
 
-    cm = confusion_matrix(all_labels, all_preds)
     accuracy = accuracy_score(all_labels, all_preds)
     precision = precision_score(all_labels, all_preds, average='weighted', zero_division=0)
     recall = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
@@ -174,133 +174,12 @@ def validation_loop(dataloader, device, model, loss_fn, writer, epoch_num):
     print(f"Validation: \n Accuracy Custom: {100 * accuracy_custom:>0.5f}%, Avg. loss: {validation_loss:>8f} \n")
     print(f"Accuracy: {accuracy:>0.5f}, Precision: {precision:>0.5}, Recall: {recall:>0.5f}, F1: {f1:>0.5f}")
 
-    # Display Confusion Matrix
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot(cmap=plt.cm.Blues)
     plt.title(f'Confusion Matrix for Epoch {epoch_num}')
     plt.show()
 
 
-def eval():
-    mushroom_dataset = MO_106_Dataset("data/mo106_dataset.csv", "data",
-                                      transform=transforms.Compose([
-                                          transforms.Resize(256),
-                                          transforms.RandomCrop(224),
-                                          transforms.RandomHorizontalFlip(),
-                                          transforms.ToTensor()
-                                      ]))
-
-    model = timm.create_model("mobilevitv2_200", pretrained=True, num_classes=106)
-    model.load_state_dict(torch.load("model_saves/second_run_106_classes/model_weights_epoch_35.pth"))
-    model.eval()
-
-    image = io.imread("random_shrooms/Shroom_10.jpg")
-    transform_pipeline = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor()
-    ])
-    image = transform_pipeline(image)
-    plt.imshow(image.permute(1, 2, 0))
-    plt.show()
-
-    # Add a batch dimension
-    image = image.unsqueeze(0)
-
-    # Make prediction
-    with torch.no_grad():
-        prediction = model(image)
-        # prediction = torch.argmax(prediction, dim=1)
-        prediction = softmax(prediction, dim=1)
-        predictions_list = prediction.tolist()[0]
-        print(predictions_list)
-        print(max(predictions_list))
-        # print the index of the class with the highest probability
-        print(f"Predicted class: {np.argmax(predictions_list)}")
-    print(prediction)
-    # print(prediction.shape)
-
-
 def run():
     train()
-    # eval()
-    # ba = BlockAttention(2, 3, 8, 8, 4)
-    # tensor = torch.tensor([
-    #     [
-    #         [
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #             [1., 1., 1., 1., 1., 1., 1., 1.],
-    #         ]
-    #         ,
-    #         [
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #             [2., 2., 2., 2., 2., 2., 2., 2.],
-    #         ],
-    #         [
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #             [3., 3., 3., 3., 3., 3., 3., 3.],
-    #         ]],
-    #     [
-    #         [
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #             [4., 4., 4., 4., 4., 4., 4., 4.],
-    #         ]
-    #         ,
-    #         [
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #             [5., 5., 5., 5., 5., 5., 5., 5.],
-    #         ],
-    #         [
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #             [6., 6., 6., 6., 6., 6., 6., 6.],
-    #         ]]
-    # ])
-    # torch.set_printoptions(threshold=10_000)
-    # print(tensor)
-    # # print(tensor.shape)
-    #
-    # windows = ba.split_into_windows(tensor)
-    # print(windows)
-    # print(windows.shape)
-    #
-    # print(ba.combine_windows(windows))
 
 
 if __name__ == '__main__':

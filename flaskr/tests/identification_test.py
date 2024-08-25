@@ -1,8 +1,8 @@
 import io
 
 import pytest
+
 from flaskr import create_app
-from pytest_mock import mocker
 
 
 @pytest.fixture()

@@ -10,7 +10,7 @@ def process_labels(image_labels):
     text_labels = image_labels.iloc[:, 0]
     unique_labels = text_labels.unique()
     label_map = {label: idx for idx, label in enumerate(unique_labels)}
-    #print(label_map)
+
     for idx, label in enumerate(unique_labels):
         print(idx, label)
     return label_map
@@ -39,7 +39,5 @@ class MO_106_Dataset(Dataset):
             label = self.target_transform(label)
 
         numeric_label = self.label_map[label]
-
-        #image = torch.from_numpy(image).type(torch.float32)
 
         return image, numeric_label
